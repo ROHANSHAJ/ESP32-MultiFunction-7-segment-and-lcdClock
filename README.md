@@ -4,7 +4,7 @@
 [![Framework: Arduino / FreeRTOS](https://img.shields.io/badge/Framework-Arduino%20%7C%20FreeRTOS-00979D.svg?logo=arduino&logoColor=white)](https://www.arduino.cc/)
 [![Time Sync: NTP & DS3231](https://img.shields.io/badge/Timekeeping-NTP%20(IST)%20%2B%20DS3231%20RTC-blue.svg)](https://en.wikipedia.org/wiki/Real-time_clock)
 [![Weather API: OpenWeather](https://img.shields.io/badge/Weather-OpenWeatherMap%20REST%20API-orange.svg)](https://openweathermap.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 An advanced, dual-display IoT Smart Clock and Environmental Station engineered on the **ESP32 Dual-Core SoC**.
 
@@ -14,145 +14,102 @@ This project features hybrid timekeeping (automated **NTP WiFi sync** with batte
 
 ## 🌟 Key Highlights & Engineering Features
 
-- 🌐 **Dual-Source Time Synchronization**:
-  - Automatically queries pool NTP servers over WiFi and adjusts for Indian Standard Time (IST UTC +5:30).
-  - Synchronizes continuously with a hardware **DS3231 Real-Time Clock**, guaranteeing sub-second accuracy even during total WiFi or power blackouts.
-- 📺 **Dual Display Architecture**:
-  - **Primary Clock**: 4-digit 7-segment LED display driven via a **CD4511 BCD-to-7-segment latch/decoder** with high-speed FreeRTOS transistor multiplexing.
-  - **Information HUD**: 16×2 character LCD with custom icons, multi-page menus, animated transitions, and auto-dimming screensaver.
-- 📱 **Embedded WiFi Web Dashboard**:
-  - Host an on-device asynchronous HTTP server reachable at `http://<ESP32-IP>`.
-  - Configure alarms, repeat days, and snooze durations directly from any smartphone or laptop.
-  - Real-time scratchpad note editor stored in persistent flash memory.
-- ⏰ **Triple Non-Volatile Alarms**:
-  - 3 independent programmable alarms saved to ESP32 Flash via `Preferences.h`.
-  - Configurable day-of-week filters (Weekdays, Weekends, Daily, or Custom).
-  - Hardware relay control driving an external **TG113 Bluetooth / MP3 speaker** for room-filling alarm audio.
-  - Interactive snooze (+5 or +15 min) and dismiss controls.
-- ⛅ **Environmental & Weather Intelligence**:
-  - Live local temperature & humidity telemetry via **DHT11**.
-  - Periodic REST API calls to **OpenWeatherMap** fetching real-time weather forecasts and pressure.
-
----
-
-## 🏗️ System Architecture & Block Diagram
-
 ```text
                                +--------------------------------------------+
                                |              ESP32 Dev Module              |
                                +--------------------------------------------+
-                                     |               |               |
-               WiFi / Internet       |               | I2C Bus       | GPIO Transistor
-               ================      |               | (SDA=21,      | Multiplexing
-           [NTP Servers] (IST)       |               |  SCL=22)      | (D1=4, D2=16,
-           [OpenWeather API]         |               |               |  D3=17, D4=5)
-           [Web Dashboard UI]        |               |               |
-                                     v               v               v
-                           +------------------+ +----------+ +---------------+
-                           | DHT11 Sensor     | | DS3231   | | CD4511 BCD    |
-                           | (Pin 13)         | | RTC Mod  | | Decoder       |
-                           +------------------+ +----------+ | (A=25, B=26,  |
-                                     |               |       |  C=27, D=14)  |
-                                     v               v       +---------------+
-                           +------------------+ +----------+         |
-                           | Relay Module     | | LCD 16x2 |         v
-                           | (Pin 23)         | | (I2C)    | +---------------+
-                           |        |         +----------+ | 4-Digit 7-Seg   |
-                           |        v                      | LED Display     |
-                           |  [TG113 Speaker]              +---------------+
-                           +------------------+
+                                                      |
+    [WiFi Network] ----------> | NTP Time Synchronizer (pool.ntp.org)       |
+                               | OpenWeatherMap JSON Client (REST API)      |
+                               | Embedded Async Web Configuration Server    |
+                               |                   |                        |
+    [DS3231 I2C RTC] <=======> | Dual-Timekeeping Engine (RTC + NTP Fallback)
+    [DHT11 Sensor] ----------> | Ambient Temperature & Humidity Sampling   |
+                               |                   |                        |
+                               | Flash Persistence (Preferences.h / NVS)    |
+                               | (Saves 3 Alarms, Sound Settings, Timezone) |
+                               |                   |                        |
+                               | +-----------------+----------------------+ |
+                               | |                                        | |
+                               v v                                        v v
+                  [16x2 I2C LCD Display]                [CD4511 BCD Decoder Driver]
+                  (0x27 I2C Address)                     (Pins: 25, 26, 27, 14)
+                  • Real-time Date & Weather             • High-Visibility LED Clock
+                  • Alarm Status & IP Address            • Multiplexed Anodes (33, 32, 19, 18)
+                  • Ambient Temp & Humidity              • Smooth Transition Animations
+                               |
+                               v
+                     [Relay Actuation Stage]
+                     (Pin 4 Active Low Trigger)
+                               |
+                               v
+                    [TG113 Sound System Module]
+                    (High-Decibel Wakeup Audio)
 ```
 
 ---
 
-## 🔌 Hardware Wiring & Pinout Guide
+## 🔌 Hardware Pinout & Wiring Specification
 
-### 1. I2C Bus Devices (LCD 16×2 & DS3231 RTC)
-| Signal | ESP32 GPIO | Description |
-| :--- | :---: | :--- |
-| **SDA** | `GPIO 21` | Shared I2C Data Line (External pull-up recommended) |
-| **SCL** | `GPIO 22` | Shared I2C Clock Line (100 kHz) |
-| **VCC** | `5V / 3.3V`| System Power Rail |
-| **GND** | `GND` | Common Ground |
+### 1. CD4511 BCD to 7-Segment Decoder & Multiplexer
+| Signal | ESP32 GPIO | Connected To | Function |
+| :--- | :---: | :--- | :--- |
+| **BCD Bit A** | `GPIO 25` | CD4511 Pin 7 (A) | Least Significant Bit (LSB) |
+| **BCD Bit B** | `GPIO 26` | CD4511 Pin 1 (B) | Bit 1 |
+| **BCD Bit C** | `GPIO 27` | CD4511 Pin 2 (C) | Bit 2 |
+| **BCD Bit D** | `GPIO 14` | CD4511 Pin 6 (D) | Most Significant Bit (MSB) |
+| **Digit 1 (D1)** | `GPIO 33` | Common Cathode Transistor 1 | Hours Tens Digit |
+| **Digit 2 (D2)** | `GPIO 32` | Common Cathode Transistor 2 | Hours Units Digit |
+| **Digit 3 (D3)** | `GPIO 19` | Common Cathode Transistor 3 | Minutes Tens Digit |
+| **Digit 4 (D4)** | `GPIO 18` | Common Cathode Transistor 4 | Minutes Units Digit |
 
-### 2. CD4511 BCD Decoder & 7-Segment Display
-| CD4511 Pin | BCD Bit | ESP32 GPIO | Notes |
+### 2. I2C Bus & Sensor Interfacing
+| Device | ESP32 GPIO | Bus / Protocol | Notes |
 | :--- | :---: | :---: | :--- |
-| Pin 7 (Input A) | Bit 0 (LSB) | `GPIO 25` | Binary weight $2^0 = 1$ |
-| Pin 1 (Input B) | Bit 1 | `GPIO 26` | Binary weight $2^1 = 2$ |
-| Pin 2 (Input C) | Bit 2 | `GPIO 27` | Binary weight $2^2 = 4$ |
-| Pin 6 (Input D) | Bit 3 (MSB) | `GPIO 14` | Binary weight $2^3 = 8$ |
-
-### 3. Digit Select Transistors (Common Cathode Multiplexing)
-| Digit | Position | ESP32 GPIO | Transistor Buffer |
-| :--- | :--- | :---: | :--- |
-| **Digit 1** | Hours Tens (H1) | `GPIO 4` | BC547 NPN Collector |
-| **Digit 2** | Hours Units (H2) | `GPIO 16` | BC547 NPN Collector |
-| **Digit 3** | Minutes Tens (M1) | `GPIO 17` | BC547 NPN Collector |
-| **Digit 4** | Minutes Units (M2) | `GPIO 5` | BC547 NPN Collector |
-
-### 4. Sensors, Buttons & Actuators
-| Component | Function | ESP32 GPIO | Configuration |
-| :--- | :--- | :---: | :--- |
-| **DHT11 Data** | Temperature & Humidity | `GPIO 13` | Single-bus bidirectional data |
-| **Relay IN** | TG113 Speaker Power Switch | `GPIO 23` | Active HIGH trigger |
-| **Button 1** | `MODE` (Cycle Menu / Cancel) | `GPIO 15` | Internal Pull-Up with Debounce |
-| **Button 2** | `UP` (Increment / Snooze) | `GPIO 32` | Internal Pull-Up with Debounce |
-| **Button 3** | `DOWN` (Decrement / Dismiss)| `GPIO 19` | Internal Pull-Up with Debounce |
+| **I2C SDA** | `GPIO 21` | I2C Data | Shared by PCF8574 LCD (0x27) & DS3231 RTC (0x68) |
+| **I2C SCL** | `GPIO 22` | I2C Clock | 400 kHz Fast-Mode I2C Bus |
+| **DHT11 Data** | `GPIO 13` | 1-Wire Digital | Ambient Temperature & Relative Humidity |
+| **Sound Relay** | `GPIO 4` | Active-Low Output | Powers TG113 Sound Module amplifier on alarm |
 
 ---
 
-## 🌐 Web Dashboard Walkthrough
+## 🌐 Embedded Web Configuration Dashboard
 
-Once connected to your home WiFi, the device prints its local IP address over Serial and on the 16x2 LCD. Navigate to `http://<ESP32-IP>` in any web browser:
+When connected to WiFi, the ESP32 hosts a responsive, mobile-optimized HTTP control portal accessible from any browser on the local subnet (`http://<esp32-ip>/`):
 
-```text
-====================================================
-           ESP32 SMART CLOCK DASHBOARD
-====================================================
- [Time] 12:45:30 PM (IST) | [Temp] 28°C | [Humidity] 62%
-----------------------------------------------------
- Alarms Configuration:
-   Alarm 1: [07]:[00]  Repeat: [Mon, Tue, Wed, Thu, Fri]  [X] Active
-   Alarm 2: [08]:[30]  Repeat: [Sat, Sun]                 [ ] Active
-   Alarm 3: [14]:[15]  Repeat: [Daily]                    [X] Active
-
- Persistent Quick-Note:
-   [ Buy groceries and inspect solder joints          ]
-                                    [ SAVE TO FLASH ]
-====================================================
-```
-
-- **Instant Flash Synchronization**: Changes made in the web UI take effect immediately without needing an MCU reboot.
-- **Relay Test**: Manually test the TG113 speaker audio output directly from the web interface.
+- **Live Synchronization**: Force instant NTP re-synchronization with precision offset calculation.
+- **Alarm Management**: Configure and persist **3 independent alarm schedules** (Hours, Minutes, Days Active, Sound Profile).
+- **Audio Profile Selection**: Toggle TG113 speaker relay actuation, continuous buzzer, or silent visual notification.
+- **Display Themes**: Configure LCD cycling intervals and customize idle standby screens.
+- **WiFi Credential Provisioning**: Hotspot fallback captive portal if network connection drops.
 
 ---
 
-## 🛠️ Installation & Flashing (Arduino IDE)
+## 💾 Non-Volatile Flash Persistence (`Preferences.h`)
 
-1. **Install ESP32 Board Core**:
-   - Add `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json` to Additional Board Manager URLs.
-   - Install **esp32 by Espressif Systems** via Board Manager.
-2. **Install Required Libraries**:
+All user configurations—including alarm times, active alarm flags, buzzer volume profiles, and weather station API keys—are persisted in ESP32 internal non-volatile storage (NVS) using `Preferences.h`. All settings survive power cycles and brownouts automatically.
+
+---
+
+## 🛠️ Installation & Flashing Guide
+
+1. **Install Arduino IDE** (or VS Code + PlatformIO).
+2. Install the **ESP32 Board Package**:
+   - Go to **Settings** $\rightarrow$ **Additional Board Manager URLs** and add:
+     `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`
+3. Install required libraries via Library Manager:
    - `LiquidCrystal_I2C` by Frank de Brabander
-   - `RTClib` by Adafruit (for DS3231)
+   - `RTClib` by Adafruit
    - `DHT sensor library` by Adafruit
-   - `ArduinoJson` by Benoît Blanchon
-   - `ESPAsyncWebServer` & `AsyncTCP`
-3. **Configure WiFi & API Keys**:
-   - Open [`clock.ino`](clock.ino) in Arduino IDE.
-   - Update your network credentials and OpenWeatherMap API key:
-     ```cpp
-     const char* ssid     = "YOUR_WIFI_SSID";
-     const char* password = "YOUR_WIFI_PASSWORD";
-     String openWeatherKey = "YOUR_OPENWEATHER_API_KEY";
-     String city = "Chennai,IN";
-     ```
-4. **Compile & Upload**:
-   - Board: **ESP32 Dev Module**
-   - Flash Size: **4MB**
-   - Upload Speed: **921600**
-   - Click **Upload** (`Ctrl + U`).
+   - `ArduinoJson` (v6 or v7) by Benoît Blanchon
+4. Open `clock.ino`.
+5. Configure your WiFi credentials:
+   ```cpp
+   const char* ssid = "YOUR_WIFI_SSID";
+   const char* password = "YOUR_WIFI_PASSWORD";
+   ```
+6. Select Board: **ESP32 Dev Module**.
+7. Connect ESP32 via USB and click **Upload**.
 
 ---
 
